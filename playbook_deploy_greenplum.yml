@@ -3,9 +3,9 @@
   hosts: greenplum_master,greenplum_segment
   become: yes
   vars:
-    name_master_host: "greenplum-db1"
-    name_master_standby_host: "greenplum-db1-stendby"
-    database_name_init: "asd"
+    name_master_host: ""
+    name_master_standby_host: ""
+    database_name_init: "gpadmin"
   roles:
     - {role: greenplum_install, tags: greenplum_install}
     - {role: greenplum_init, tags: greenplum_init}
