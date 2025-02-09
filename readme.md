@@ -1,0 +1,1 @@
+Установка gpdb 6.X на astra через Ansible

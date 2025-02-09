@@ -1,0 +1,156 @@
+---
+- name: Передача архива
+  copy:
+    src: gpdb-adb-6.x.zip
+    dest: /tmp
+
+- name: Проверка наличия файлов установки
+  stat:
+    path: /tmp/gpdb-adb-6.x
+  register: check_files_installed_gpdb
+
+- name: Разархивация архива
+  unarchive:
+    src: /tmp/gpdb-adb-6.x.zip
+    dest: /tmp/
+    remote_src: yes
+  when: not check_files_installed_gpdb.stat.exists
+
+- name: Установка необходимых пакетов для компиляции gpdb
+  apt:
+    name:
+      - 'bison'
+      - 'cmake'
+      - 'curl'
+      - 'flex'
+      - 'g++'
+      - 'gcc'
+      - 'git'
+      - 'iproute2'
+      - 'iputils-ping'
+      - 'libapr1-dev'
+      - 'libaprutil1-dev'
+      - 'libbz2-dev'
+      - 'libcurl4-openssl-dev'
+      - 'libevent-dev'
+      - 'libipc-run-perl'
+      - 'libkrb5-dev'
+      - 'libpam-dev'
+      - 'libperl-dev'
+      - 'libreadline-dev'
+      - 'libssl-dev'
+      - 'libtool'
+      - 'libuv1-dev'
+      - 'libxml2-dev'
+      - 'libxslt-dev'
+      - 'libyaml-dev'
+      - 'libzstd-dev'
+      - 'locales'
+      - 'net-tools'
+      - 'openssh-client'
+      - 'openssh-server'
+      - 'pkg-config'
+      - 'python'
+      - 'python-dev'
+      - 'python-yaml'
+      - 'rsync'
+      - 'zlib1g-dev'
+      - 'sshpass'
+    update_cache: yes
+
+- name: Проверка наличия файлов gpdb
+  stat:
+    path: /usr/local/gpdb
+  register: check_files_gpdb
+
+- name: Настройка среды сборки gpdb
+  shell: cd /tmp/gpdb-adb-6.x/ && ./configure --disable-orca --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
+  when: not check_files_gpdb.stat.exists
+
+- name: Преобразование файлов посредством make
+  shell: cd /tmp/gpdb-adb-6.x/ && make
+  when: not check_files_gpdb.stat.exists
+
+- name: Установка gpdb
+  shell: cd /tmp/gpdb-adb-6.x/ && make install
+  when: not check_files_gpdb.stat.exists
+
+- name: Настрока locale
+  lineinfile:
+    path: /etc/locale.gen
+    line: en_US.UTF-8 UTF-8
+    state: present
+
+- name: Обновление locale
+  shell: locale-gen
+
+- name: Добавление записей всех хостов в файл hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+    state: present
+  loop: "{{ groups['greenplum_master'] + groups['greenplum_segment'] }}"
+
+- name: Создание группы gpadmin
+  group:
+    name: gpadmin
+    state: present
+    system: yes
+
+- name: Создание пользователя gpadmin
+  user:
+    name: gpadmin
+    password: "{{ 'gpadmin' | password_hash('sha512') }}"
+    groups: gpadmin,astra-admin
+    shell: /bin/bash
+    create_home: yes
+    system: yes
+    append: yes
+
+- name: Создание ключа SSH
+  user:
+    name: gpadmin
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: /home/gpadmin/.ssh/id_rsa
+  register: ssh_key
+
+- block:
+  - name: Копирование ключа на все хосты
+    shell: "SSHPASS=gpadmin sshpass -e ssh-copy-id -o StrictHostKeyChecking=no {{ hostvars[item]['ansible_host'] }}"
+    loop: "{{ groups['greenplum_master'] + groups['greenplum_segment'] }}"
+
+  - name: Добавление в bashrc путь до скрипта gpdb
+    lineinfile:
+      path: /home/gpadmin/.bashrc
+      line: source /usr/local/gpdb/greenplum_path.sh
+      state: present
+
+  - name: Создание директорий хранения данных для сегмент-хостов
+    file:
+      path: /home/gpadmin/data
+      state: directory
+    when: "'greenplum_segment' in group_names"
+    tags: asdasdasdasd
+
+  - name: Создание директорий для мастер-хостов
+    file:
+      path: /home/gpadmin/master
+      state: directory
+    when: "'greenplum_master' in group_names"
+
+  become_user: gpadmin
+  vars:
+    ansible_user: gpadmin
+    ansible_ssh_pass: gpadmin
+
+- name: Изменение конфигурации systemd
+  lineinfile:
+    path: /etc/systemd/logind.conf
+    line: KillUserProcesses=no
+    state: present
+
+- name: Перезагрузка конфигурации systed-logind
+  service:
+    name: systemd-logind
+    state: restarted

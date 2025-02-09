@@ -1,0 +1,39 @@
+---
+- block:
+    - name: Копирование конфигурации файла инициализации кластера
+      template:
+        src: gpinitsystem_config.j2
+        dest: /home/gpadmin/gpinitsystem_config
+
+    - name: Копирование файла хоста машин сегментов
+      template:
+        src: hostfile_gpinitsystem.j2
+        dest: /home/gpadmin/hostfile_gpinitsystem
+      tags: asdasd
+    
+    - name: Добавление PATH_MASTER в bashrc
+      lineinfile:
+        path: /home/gpadmin/.bashrc
+        line: export MASTER_DATA_DIRECTORY=/home/gpadmin/data/master/gpseg-1
+        state: present
+
+    - name: Запуск процедуры инициализации кластера
+      shell: gpinitsystem -a -c /home/gpadmin/gpinitsystem_config
+      register: result_init_gpdb
+      ignore_errors: yes
+    
+    - name: Результат инициализации кластера (успех)
+      debug:
+        msg: "Кластер greenplum успешно создан!"
+      when: "'Database successfully started' in result_init_gpdb.stdout"
+    
+    - name: Результат инициализации кластера (ошибка)
+      debug:
+        msg: "Произошла ошибка при создании кластера!"
+      when: not "'Database successfully started' in result_init_gpdb.stdout"
+      
+  run_once: yes
+  become_user: gpadmin
+  vars:
+    ansible_user: gpadmin
+    ansible_ssh_pass: gpadmin

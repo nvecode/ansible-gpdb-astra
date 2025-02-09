@@ -1,0 +1,12 @@
+ARRAY_NAME="Greenplum Data Platform"
+SEG_PREFIX=gpseg
+PORT_BASE=6000
+declare -a DATA_DIRECTORY=(/home/gpadmin/data)
+MASTER_HOSTNAME={{ inventory_hostname }}
+MASTER_DIRECTORY=/home/gpadmin/master
+MASTER_PORT=5432
+MACHINE_LIST_FILE=/home/gpadmin/hostfile_gpinitsystem
+TRUSTED_SHELL=ssh
+CHECK_POINT_SEGMENTS=8
+ENCODING=UNICODE
+DATABASE_NAME={{ database_name_init }}
